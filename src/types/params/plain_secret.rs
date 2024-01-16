@@ -150,7 +150,28 @@ impl<'a> PlainSecretParamsRef<'a> {
                             oid: curve.oid(),
                             hash: *hash,
                             alg_sym: *alg_sym,
-                            secret,
+                            secret: ECDHSecretPoint::Cv25519(secret),
+                        }))
+                    }
+                    ECCCurve::P521 => {
+                        use cipher::Unsigned;
+                        use p521::{elliptic_curve::Curve, NistP521};
+
+                        const SECRET_SIZE: usize = <NistP521 as Curve>::FieldBytesSize::USIZE;
+                        ensure!(d.len() <= SECRET_SIZE, "invalid secret");
+
+                        let mut secret = [0u8; SECRET_SIZE];
+                        secret
+                            .rchunks_exact_mut(d.len())
+                            .next()
+                            .unwrap()
+                            .copy_from_slice(d.as_bytes());
+
+                        Ok(SecretKeyRepr::ECDH(ECDHSecretKey {
+                            oid: curve.oid(),
+                            hash: *hash,
+                            alg_sym: *alg_sym,
+                            secret: ECDHSecretPoint::P521(secret),
                         }))
                     }
                     _ => unsupported_err!("curve {:?} for ECDH", curve.to_string()),

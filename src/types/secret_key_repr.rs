@@ -1,6 +1,8 @@
 use std::fmt;
 
+use cipher::Unsigned;
 use num_bigint::BigUint;
+use p521::{elliptic_curve::Curve, NistP521};
 use rsa::RsaPrivateKey;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -21,24 +23,57 @@ pub enum SecretKeyRepr {
     EdDSA(EdDSASecretKey),
 }
 
-/// Secret key for ECDH with Curve25519, the only combination we currently support.
+/// Secret key for ECDH with Curve25519 or P-521, the only combinations we currently support.
 #[derive(Clone, PartialEq, Eq, Zeroize, ZeroizeOnDrop)]
 pub struct ECDHSecretKey {
     /// The secret point.
-    pub secret: [u8; 32],
+    pub secret: ECDHSecretPoint,
     pub hash: HashAlgorithm,
     pub oid: Vec<u8>,
     pub alg_sym: SymmetricKeyAlgorithm,
 }
 
+impl ECDHSecretKey {
+    pub fn secret(&self) -> &[u8] {
+        self.secret.secret()
+    }
+}
+
 impl fmt::Debug for ECDHSecretKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ECDHSecretKey")
-            .field("secret", &"[..]")
+            .field("secret", &self.secret)
             .field("hash", &self.hash)
             .field("oid", &hex::encode(&self.oid))
             .field("alg_sym", &self.alg_sym)
             .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Zeroize, ZeroizeOnDrop)]
+#[non_exhaustive]
+pub enum ECDHSecretPoint {
+    Cv25519([u8; 32]),
+    P521([u8; <NistP521 as Curve>::FieldBytesSize::USIZE]),
+}
+
+impl ECDHSecretPoint {
+    pub fn secret(&self) -> &[u8] {
+        match self {
+            Self::Cv25519(secret) => secret,
+            Self::P521(secret) => secret,
+        }
+    }
+}
+
+impl fmt::Debug for ECDHSecretPoint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Cv25519(_) => f.debug_tuple("Cv25519"),
+            Self::P521(_) => f.debug_tuple("P521"),
+        }
+        .field(&"&[..]")
+        .finish()
     }
 }
 
